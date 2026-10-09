@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import io
+import datetime
+from streamlit_gsheets import GSheetsConnection
 
 # Configuración de la página
 st.set_page_config(
@@ -10,7 +12,43 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ==========================================
+# 1. PANEL DE REGISTRO (BARRA LATERAL)
+# ==========================================
+st.sidebar.title("📊 Registro de Uso")
+st.sidebar.write("Por favor, ingresa los datos para habilitar el validador:")
+
+correo = st.sidebar.text_input("Tu Correo Electrónico", placeholder="ejemplo@toteat.com")
+id_toteat = st.sidebar.text_input("ID del Cliente (Toteat)", placeholder="Ej. 12345")
+
+# Validaciones de los campos
+datos_validos = True
+
+if id_toteat:
+    if not id_toteat.isdigit():
+        st.sidebar.error("⚠️ El ID Toteat debe contener SOLO números (sin espacios, comas ni letras).")
+        datos_validos = False
+
+if not correo or not id_toteat:
+    datos_validos = False
+
+# Bloquear la app si los datos no están listos o son incorrectos
+if not datos_validos:
+    st.sidebar.warning("👈 ⚠️ Completa los datos para habilitar la herramienta.")
+    st.title("🍲 Validador de Unidades: Ingredientes, Extras y Recetas")
+    st.warning("⚠️ Debes completar tu correo y el ID del cliente en el panel lateral izquierdo para poder utilizar la herramienta y registrar la consulta.")
+    st.stop() # Detiene la ejecución aquí hasta que se llenen los datos
+
+st.sidebar.success("✅ Datos registrados. ¡Puedes usar la herramienta!")
+st.sidebar.divider()
+
+
+# ==========================================
+# 2. APLICACIÓN PRINCIPAL
+# ==========================================
 st.title("🍲 Validador de Unidades: Ingredientes, Extras y Recetas")
+st.info(f"🕵️‍♂️ **Consultor:** {correo} | 🏢 **Cliente ID:** {id_toteat}")
+
 st.markdown("""
 Esta herramienta valida la consistencia de **Unidades de Medida** en todo tu sistema:
 1. **Base de Ingredientes:** Revisa que `ub` sea estrictamente **`UN`**, **`kg`** o **`L`**, y que coincida con `conv.0.umed` y `conv.0.umedb`. Excluye inactivos (`wact = "0"`).
@@ -146,6 +184,12 @@ def process_master_file(uploaded_file, label_name):
 df_ingr_master, df_ingr_inactive = process_master_file(file_ingr, "Base de Ingredientes")
 df_extra_master, df_extra_inactive = process_master_file(file_extra, "Base de Extras")
 
+# Variables globales para rastrear errores para las métricas
+num_err_ingr = 0
+num_err_extra = 0
+num_err_det = 0
+num_err_head = 0
+
 tab1, tab2, tab3, tab4 = st.tabs([
     "🥗 1. Base Ingredientes", 
     "➕ 2. Base Extras",
@@ -183,14 +227,15 @@ with tab1:
 
             df_clean['Detalle del Error'] = df_clean.apply(get_ingr_error, axis=1)
             err_ingr = df_clean[df_clean['Detalle del Error'] != ""].copy()
+            num_err_ingr = len(err_ingr) # Registrar cantidad de errores
 
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Ingredientes Activos", len(df_clean))
-            m2.metric("Ingredientes OK", len(df_clean) - len(err_ingr))
-            m3.metric("Ingredientes CON Error", len(err_ingr), delta="-Requieren acción" if len(err_ingr)>0 else "OK", delta_color="inverse")
+            m2.metric("Ingredientes OK", len(df_clean) - num_err_ingr)
+            m3.metric("Ingredientes CON Error", num_err_ingr, delta="-Requieren acción" if num_err_ingr>0 else "OK", delta_color="inverse")
 
-            if len(err_ingr) > 0:
-                st.error(f"¡Se encontraron {len(err_ingr)} ingrediente(s) desalineados o con unidades no permitidas!")
+            if num_err_ingr > 0:
+                st.error(f"¡Se encontraron {num_err_ingr} ingrediente(s) desalineados o con unidades no permitidas!")
                 t_show = err_ingr[['pl', 'np', 'ub', 'conv.0.umed', 'conv.0.umedb', 'Detalle del Error']].copy()
                 t_show.columns = ['ID Producto', 'Nombre', 'Medida Base (ub)', 'Conv. a Definir (BA)', 'Conv. Base (BB)', '¿Qué está mal?']
                 st.dataframe(t_show, use_container_width=True)
@@ -234,14 +279,15 @@ with tab2:
 
             df_clean_ex['Detalle del Error'] = df_clean_ex.apply(get_extra_error, axis=1)
             err_extra = df_clean_ex[df_clean_ex['Detalle del Error'] != ""].copy()
+            num_err_extra = len(err_extra) # Registrar cantidad de errores
 
             e1, e2, e3 = st.columns(3)
             e1.metric("Total Extras Activos", len(df_clean_ex))
-            e2.metric("Extras OK", len(df_clean_ex) - len(err_extra))
-            e3.metric("Extras CON Error", len(err_extra), delta="-Requieren acción" if len(err_extra)>0 else "OK", delta_color="inverse")
+            e2.metric("Extras OK", len(df_clean_ex) - num_err_extra)
+            e3.metric("Extras CON Error", num_err_extra, delta="-Requieren acción" if num_err_extra>0 else "OK", delta_color="inverse")
 
-            if len(err_extra) > 0:
-                st.error(f"¡Se encontraron {len(err_extra)} extra(s) desalineados o con unidades no permitidas!")
+            if num_err_extra > 0:
+                st.error(f"¡Se encontraron {num_err_extra} extra(s) desalineados o con unidades no permitidas!")
                 t_ex_show = err_extra[['pl', 'np', 'ub', 'conv.0.umed', 'conv.0.umedb', 'Detalle del Error']].copy()
                 t_ex_show.columns = ['ID Extra', 'Nombre', 'Medida Base (ub)', 'Conv. a Definir (BA)', 'Conv. Base (BB)', '¿Qué está mal?']
                 st.dataframe(t_ex_show, use_container_width=True)
@@ -368,14 +414,15 @@ with tab3:
             df_det['Medida_Base_Maestro'] = [r[3] for r in results]
 
             err_det = df_det[df_det['Estado_Validacion'] != "OK"].copy()
+            num_err_det = len(err_det) # Registrar cantidad de errores
 
             r1, r2, r3 = st.columns(3)
             r1.metric("Total Líneas en Recetas", len(df_det))
-            r2.metric("Líneas Correctas", len(df_det) - len(err_det))
-            r3.metric("Líneas con Discrepancia", len(err_det), delta="-Requieren acción" if len(err_det)>0 else "OK", delta_color="inverse")
+            r2.metric("Líneas Correctas", len(df_det) - num_err_det)
+            r3.metric("Líneas con Discrepancia", num_err_det, delta="-Requieren acción" if num_err_det>0 else "OK", delta_color="inverse")
 
-            if len(err_det) > 0:
-                st.error(f"¡Se detectaron {len(err_det)} línea(s) de recetas con inconsistencias!")
+            if num_err_det > 0:
+                st.error(f"¡Se detectaron {num_err_det} línea(s) de recetas con inconsistencias!")
                 
                 cols_to_show = [col_id_rec, 'Nombre_Receta_Padre', col_id_ingr, 'Tipo_Item', 'Nombre_Item_Maestro', col_um_det, 'Medida_Base_Maestro', 'Estado_Validacion']
                 t_det_show = err_det[cols_to_show].copy()
@@ -468,14 +515,15 @@ with tab4:
 
             df_head['Estado_Validacion'] = df_head.apply(check_head_line, axis=1)
             err_head = df_head[df_head['Estado_Validacion'].str.startswith("ERROR")].copy()
+            num_err_head = len(err_head) # Registrar cantidad de errores
 
             h1, h2, h3 = st.columns(3)
             h1.metric("Total Encabezados de Receta", len(df_head))
-            h2.metric("Encabezados Correctos", len(df_head) - len(err_head))
-            h3.metric("Encabezados con Error", len(err_head), delta="-Requieren acción" if len(err_head)>0 else "OK", delta_color="inverse")
+            h2.metric("Encabezados Correctos", len(df_head) - num_err_head)
+            h3.metric("Encabezados con Error", num_err_head, delta="-Requieren acción" if num_err_head>0 else "OK", delta_color="inverse")
 
-            if len(err_head) > 0:
-                st.error(f"¡Se detectaron {len(err_head)} encabezado(s) de recetas con unidades inconsistentes!")
+            if num_err_head > 0:
+                st.error(f"¡Se detectaron {num_err_head} encabezado(s) de recetas con unidades inconsistentes!")
                 t_head_show = err_head[[col_id_rec_h, 'Nombre_Receta_Header', col_um_head, 'Estado_Validacion']].copy()
                 t_head_show.columns = ['ID Receta', 'Nombre Receta / Producto', 'Unidad en Header', 'Diagnóstico del Error']
                 st.dataframe(t_head_show, use_container_width=True)
@@ -490,3 +538,60 @@ with tab4:
             st.warning("⚠️ Carga al menos la **1. Base de Ingredientes** o la **2. Base de Extras** para habilitar la validación.")
     else:
         st.warning("⚠️ Carga el archivo **4. HEADERS_RECETAS (.txt)** en el panel lateral.")
+
+
+# ==========================================
+# 3. GUARDADO DE MÉTRICAS EN GOOGLE SHEETS
+# ==========================================
+st.divider()
+st.subheader("📊 Finalizar y Registrar Diagnóstico")
+
+total_errores = num_err_ingr + num_err_extra + num_err_det + num_err_head
+
+st.markdown(f"**Resumen de la validación para el Cliente ID:** `{id_toteat}`")
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Errores Ingredientes", num_err_ingr)
+c2.metric("Errores Extras", num_err_extra)
+c3.metric("Errores Detalles Receta", num_err_det)
+c4.metric("Errores Headers Receta", num_err_head)
+c5.metric("TOTAL ERRORES", total_errores)
+
+st.info("💡 Una vez que hayas cargado y revisado los archivos, haz clic en el botón de abajo para guardar este registro en nuestras métricas.")
+
+if st.button("💾 Guardar Registro en Google Sheets", type="primary"):
+    with st.spinner("Guardando registro en la base de datos..."):
+        try:
+            # Conexión a Google Sheets
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            
+            try:
+                # Intenta leer la hoja 'Registro'
+                df_existente = conn.read(worksheet="Registro")
+            except Exception:
+                # Si falla (ej. hoja vacía o recién creada), inicializa vacío
+                df_existente = pd.DataFrame()
+            
+            # Crear la nueva fila
+            nuevo_registro = pd.DataFrame([{
+                "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Correo_Consultor": correo,
+                "ID_Cliente": id_toteat,
+                "Err_Ingredientes": num_err_ingr,
+                "Err_Extras": num_err_extra,
+                "Err_Detalles": num_err_det,
+                "Err_Headers": num_err_head,
+                "Total_Errores": total_errores
+            }])
+            
+            # Unir data y actualizar
+            if not df_existente.empty:
+                df_actualizado = pd.concat([df_existente, nuevo_registro], ignore_index=True)
+            else:
+                df_actualizado = nuevo_registro
+                
+            conn.update(worksheet="Registro", data=df_actualizado)
+            st.success("✅ ¡Registro guardado exitosamente! Gracias por mantener las métricas actualizadas.")
+            
+        except Exception as e:
+            st.error(f"❌ Ocurrió un error al intentar guardar en Google Sheets: {e}")
+            st.write("Verifica que configuraste los 'Secrets' en Streamlit y que compartiste el archivo de Google Sheets con el correo de la cuenta de servicio.")
