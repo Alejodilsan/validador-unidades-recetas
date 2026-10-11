@@ -54,7 +54,7 @@ Esta herramienta valida la consistencia de **Unidades de Medida** en todo tu sis
 1. **Base de Ingredientes:** Revisa que `ub` sea estrictamente **`UN`**, **`kg`** o **`L`**, y que coincida con `conv.0.umed` y `conv.0.umedb`. Excluye inactivos (`wact = "0"`).
 2. **Base de Extras:** Revisa que `ub` sea estrictamente **`UN`**, **`kg`** o **`L`**, y que coincida con `conv.0.umed` y `conv.0.umedb`. Excluye inactivos (`wact = "0"`).
 3. **Detalle de Recetas (`DETALLE_RECETAS.txt`):** Revisa que los componentes usen unidades compatibles con la `Medida Base (ub)` de su maestro (`KG` ↔ `G`, `L` ↔ `ML`, `UN`).
-   - Muestra el **Nombre de la Receta / Producto Padre** e identifica explícitamente ítems con **`wact = "0"`** (Stock Control OFF).
+   - Muestra el **Nombre de la Receta / Producto Padre** e identifica explícitamente ítems con **`wact = "0"`** (Stock Control OFF) como información, sin considerarlos errores.
 4. **Encabezado de Recetas (`HEADERS_RECETAS.txt`):** Revisa que los rendimientos y producciones estén alineados mostrando el **Nombre de la Receta**.
 """)
 
@@ -301,6 +301,7 @@ with tab2:
     else:
         st.warning("⚠️ Carga el archivo **2. Base de Extras** en el panel lateral.")
 
+
 # --- TAB 3: DETALLE RECETAS ---
 with tab3:
     st.header("Validación DETALLE_RECETAS vs Maestros")
@@ -336,15 +337,11 @@ with tab3:
             df_det['id_item_clean'] = df_det[col_id_ingr].astype(str).str.strip()
             df_det['um_det_clean'] = df_det[col_um_det].apply(clean_unit)
             
-            # Mapas Activos
             ingr_map = df_ingr_master.set_index('pl')[['np', 'ub']].to_dict('index') if df_ingr_master is not None and not df_ingr_master.empty else {}
             extra_map = df_extra_master.set_index('pl')[['np', 'ub']].to_dict('index') if df_extra_master is not None and not df_extra_master.empty else {}
-            
-            # Mapas Inactivos (Stock Control OFF)
             ingr_inact_map = df_ingr_inactive.set_index('pl')[['np', 'ub']].to_dict('index') if df_ingr_inactive is not None and not df_ingr_inactive.empty else {}
             extra_inact_map = df_extra_inactive.set_index('pl')[['np', 'ub']].to_dict('index') if df_extra_inactive is not None and not df_extra_inactive.empty else {}
 
-            # Mapa auxiliar de Nombres de Receta proveniente de HEADERS_RECETAS (si está cargado)
             headers_name_map = {}
             if file_head is not None:
                 df_head_tmp = read_text_file(file_head)
@@ -361,14 +358,10 @@ with tab3:
                     return str(row[col_nom_rec]).strip()
                 if rec_id in headers_name_map and headers_name_map[rec_id] != "":
                     return headers_name_map[rec_id]
-                if rec_id in ingr_map:
-                    return ingr_map[rec_id]['np']
-                if rec_id in extra_map:
-                    return extra_map[rec_id]['np']
-                if rec_id in ingr_inact_map:
-                    return ingr_inact_map[rec_id]['np']
-                if rec_id in extra_inact_map:
-                    return extra_inact_map[rec_id]['np']
+                if rec_id in ingr_map: return ingr_map[rec_id]['np']
+                if rec_id in extra_map: return extra_map[rec_id]['np']
+                if rec_id in ingr_inact_map: return ingr_inact_map[rec_id]['np']
+                if rec_id in extra_inact_map: return extra_inact_map[rec_id]['np']
                 return "NO ESPECIFICADO"
 
             df_det['Nombre_Receta_Padre'] = df_det.apply(get_recipe_name, axis=1)
@@ -377,33 +370,29 @@ with tab3:
                 item_id = row['id_item_clean']
                 um_recipe = row['um_det_clean']
                 
-                # 1. Ingrediente Activo
                 if item_id in ingr_map:
                     ub_master = clean_unit(ingr_map[item_id]['ub'])
                     if not is_unit_compatible(ub_master, um_recipe):
                         return f"ERROR: Unidad en Receta ('{um_recipe}') no es compatible con Medida Base Ingrediente ('{ub_master}')", "Ingrediente", ingr_map[item_id]['np'], ub_master
                     return "OK", "Ingrediente", ingr_map[item_id]['np'], ub_master
                 
-                # 2. Extra Activo
                 elif item_id in extra_map:
                     ub_master = clean_unit(extra_map[item_id]['ub'])
                     if not is_unit_compatible(ub_master, um_recipe):
                         return f"ERROR: Unidad en Receta ('{um_recipe}') no es compatible con Medida Base Extra ('{ub_master}')", "Extra", extra_map[item_id]['np'], ub_master
                     return "OK", "Extra", extra_map[item_id]['np'], ub_master
                 
-                # 3. Ingrediente Inactivo (wact = 0)
+                # ADVERTENCIA PARA INACTIVOS (wact=0)
                 elif item_id in ingr_inact_map:
                     ub_master = clean_unit(ingr_inact_map[item_id]['ub'])
                     np_master = ingr_inact_map[item_id]['np']
-                    return "ERROR: Ítem con stock control off (wact = 0)", "Stock Control OFF (Ingrediente)", np_master, ub_master
+                    return "INFO: Ítem con stock control off (wact = 0)", "Stock Control OFF (Ingrediente)", np_master, ub_master
                 
-                # 4. Extra Inactivo (wact = 0)
                 elif item_id in extra_inact_map:
                     ub_master = clean_unit(extra_inact_map[item_id]['ub'])
                     np_master = extra_inact_map[item_id]['np']
-                    return "ERROR: Ítem con stock control off (wact = 0)", "Stock Control OFF (Extra)", np_master, ub_master
+                    return "INFO: Ítem con stock control off (wact = 0)", "Stock Control OFF (Extra)", np_master, ub_master
 
-                # 5. Ítem Verdaderamente Desconocido
                 else:
                     return "ERROR: El ítem no existe ni en Maestro de Ingredientes ni en Extras", "Desconocido", "DESCONOCIDO", "N/A"
 
@@ -413,29 +402,37 @@ with tab3:
             df_det['Nombre_Item_Maestro'] = [r[2] for r in results]
             df_det['Medida_Base_Maestro'] = [r[3] for r in results]
 
-            err_det = df_det[df_det['Estado_Validacion'] != "OK"].copy()
-            num_err_det = len(err_det) # Registrar cantidad de errores
+            # Filtramos Errores reales por un lado, e Info por otro
+            err_det = df_det[df_det['Estado_Validacion'].str.startswith("ERROR")].copy()
+            info_det = df_det[df_det['Estado_Validacion'].str.startswith("INFO")].copy()
+            num_err_det = len(err_det) # ¡Solo cuenta los errores reales!
 
-            r1, r2, r3 = st.columns(3)
+            r1, r2, r3, r4 = st.columns(4)
             r1.metric("Total Líneas en Recetas", len(df_det))
-            r2.metric("Líneas Correctas", len(df_det) - num_err_det)
+            r2.metric("Líneas Correctas", len(df_det) - num_err_det - len(info_det))
             r3.metric("Líneas con Discrepancia", num_err_det, delta="-Requieren acción" if num_err_det>0 else "OK", delta_color="inverse")
+            r4.metric("Líneas Inactivas", len(info_det), delta="Info wact=0", delta_color="off")
+
+            cols_to_show = [col_id_rec, 'Nombre_Receta_Padre', col_id_ingr, 'Tipo_Item', 'Nombre_Item_Maestro', col_um_det, 'Medida_Base_Maestro', 'Estado_Validacion']
 
             if num_err_det > 0:
-                st.error(f"¡Se detectaron {num_err_det} línea(s) de recetas con inconsistencias!")
-                
-                cols_to_show = [col_id_rec, 'Nombre_Receta_Padre', col_id_ingr, 'Tipo_Item', 'Nombre_Item_Maestro', col_um_det, 'Medida_Base_Maestro', 'Estado_Validacion']
+                st.error(f"¡Se detectaron {num_err_det} línea(s) de recetas con inconsistencias (ERRORES)!")
                 t_det_show = err_det[cols_to_show].copy()
                 t_det_show.columns = ['ID Receta', 'Nombre Receta / Producto Padre', 'ID Ítem', 'Tipo Ítem', 'Nombre Ítem (Maestro)', 'Unidad en Receta', 'Unidad Base (Maestro)', 'Diagnóstico del Error']
-                
                 st.dataframe(t_det_show, use_container_width=True)
                 
                 out_det = io.BytesIO()
                 with pd.ExcelWriter(out_det, engine='openpyxl') as w:
                     t_det_show.to_excel(w, index=False, sheet_name='Errores_Detalle_Recetas')
                 st.download_button("📥 Descargar Reporte Errores DETALLE_RECETAS", out_det.getvalue(), "Errores_Detalle_Recetas.xlsx")
-            else:
-                st.success("🎉 Todas las unidades usadas en las recetas son válidas y compatibles con la Medida Base (ub) de tus maestros.")
+            elif num_err_det == 0:
+                st.success("🎉 Todas las unidades usadas en las recetas son válidas y compatibles con la Medida Base (ub).")
+
+            if len(info_det) > 0:
+                st.warning(f"⚠️ Nota Informativa: Hay {len(info_det)} línea(s) referenciando a ingredientes/extras inactivos (wact = 0).")
+                with st.expander("Ver lista de ítems inactivos usados en recetas"):
+                    st.dataframe(info_det[cols_to_show], use_container_width=True)
+
         elif df_ingr_master is None and df_extra_master is None:
             st.warning("⚠️ Carga al menos la **1. Base de Ingredientes** o la **2. Base de Extras** para habilitar el cruce.")
     else:
@@ -475,7 +472,6 @@ with tab4:
             
             ingr_map = df_ingr_master.set_index('pl')[['np', 'ub']].to_dict('index') if df_ingr_master is not None and not df_ingr_master.empty else {}
             extra_map = df_extra_master.set_index('pl')[['np', 'ub']].to_dict('index') if df_extra_master is not None and not df_extra_master.empty else {}
-            
             ingr_inact_map = df_ingr_inactive.set_index('pl')[['np', 'ub']].to_dict('index') if df_ingr_inactive is not None and not df_ingr_inactive.empty else {}
             extra_inact_map = df_extra_inactive.set_index('pl')[['np', 'ub']].to_dict('index') if df_extra_inactive is not None and not df_extra_inactive.empty else {}
 
@@ -483,14 +479,10 @@ with tab4:
                 rec_id = row['id_rec_clean']
                 if col_nom_rec_h != "(Ninguna / Buscar en Maestro)" and col_nom_rec_h in row and pd.notna(row[col_nom_rec_h]) and str(row[col_nom_rec_h]).strip() != "":
                     return str(row[col_nom_rec_h]).strip()
-                if rec_id in ingr_map:
-                    return ingr_map[rec_id]['np']
-                if rec_id in extra_map:
-                    return extra_map[rec_id]['np']
-                if rec_id in ingr_inact_map:
-                    return ingr_inact_map[rec_id]['np']
-                if rec_id in extra_inact_map:
-                    return extra_inact_map[rec_id]['np']
+                if rec_id in ingr_map: return ingr_map[rec_id]['np']
+                if rec_id in extra_map: return extra_map[rec_id]['np']
+                if rec_id in ingr_inact_map: return ingr_inact_map[rec_id]['np']
+                if rec_id in extra_inact_map: return extra_inact_map[rec_id]['np']
                 return "NO ESPECIFICADO"
 
             df_head['Nombre_Receta_Header'] = df_head.apply(get_header_recipe_name, axis=1)
@@ -509,18 +501,23 @@ with tab4:
                     if not is_unit_compatible(ub_master, um_head):
                         return f"ERROR: Unidad Header ('{um_head}') no es compatible con Medida Base Extra ('{ub_master}')"
                     return "OK (Coincide con Maestro de Extra)"
+                
+                # ADVERTENCIA PARA INACTIVOS (wact=0)
                 elif rec_id in ingr_inact_map or rec_id in extra_inact_map:
-                    return "ERROR: Receta/Subreceta con stock control off (wact = 0)"
+                    return "INFO: Receta/Subreceta con stock control off (wact = 0)"
                 return "OK (Receta Final)"
 
             df_head['Estado_Validacion'] = df_head.apply(check_head_line, axis=1)
+            
             err_head = df_head[df_head['Estado_Validacion'].str.startswith("ERROR")].copy()
-            num_err_head = len(err_head) # Registrar cantidad de errores
+            info_head = df_head[df_head['Estado_Validacion'].str.startswith("INFO")].copy()
+            num_err_head = len(err_head)
 
-            h1, h2, h3 = st.columns(3)
-            h1.metric("Total Encabezados de Receta", len(df_head))
-            h2.metric("Encabezados Correctos", len(df_head) - num_err_head)
+            h1, h2, h3, h4 = st.columns(4)
+            h1.metric("Total Encabezados", len(df_head))
+            h2.metric("Encabezados Correctos", len(df_head) - num_err_head - len(info_head))
             h3.metric("Encabezados con Error", num_err_head, delta="-Requieren acción" if num_err_head>0 else "OK", delta_color="inverse")
+            h4.metric("Encabezados Inactivos", len(info_head), delta="Info wact=0", delta_color="off")
 
             if num_err_head > 0:
                 st.error(f"¡Se detectaron {num_err_head} encabezado(s) de recetas con unidades inconsistentes!")
@@ -532,8 +529,14 @@ with tab4:
                 with pd.ExcelWriter(out_head, engine='openpyxl') as w:
                     t_head_show.to_excel(w, index=False, sheet_name='Errores_Headers')
                 st.download_button("📥 Descargar Reporte Errores HEADERS_RECETAS", out_head.getvalue(), "Errores_Headers_Recetas.xlsx")
-            else:
+            elif num_err_head == 0:
                 st.success("🎉 Todos los encabezados de recetas/subrecetas tienen unidades válidas.")
+
+            if len(info_head) > 0:
+                st.warning(f"⚠️ Nota Informativa: Hay {len(info_head)} encabezado(s) inactivo(s) (wact = 0).")
+                with st.expander("Ver lista de encabezados inactivos"):
+                    st.dataframe(info_head[[col_id_rec_h, 'Nombre_Receta_Header', col_um_head, 'Estado_Validacion']], use_container_width=True)
+
         elif df_ingr_master is None and df_extra_master is None:
             st.warning("⚠️ Carga al menos la **1. Base de Ingredientes** o la **2. Base de Extras** para habilitar la validación.")
     else:
@@ -541,10 +544,10 @@ with tab4:
 
 
 # ==========================================
-# 3. GUARDADO DE MÉTRICAS EN GOOGLE SHEETS
+# 3. GUARDADO AUTOMÁTICO DE MÉTRICAS
 # ==========================================
 st.divider()
-st.subheader("📊 Finalizar y Registrar Diagnóstico")
+st.subheader("📊 Resumen del Diagnóstico")
 
 total_errores = num_err_ingr + num_err_extra + num_err_det + num_err_head
 
@@ -554,44 +557,51 @@ c1.metric("Errores Ingredientes", num_err_ingr)
 c2.metric("Errores Extras", num_err_extra)
 c3.metric("Errores Detalles Receta", num_err_det)
 c4.metric("Errores Headers Receta", num_err_head)
-c5.metric("TOTAL ERRORES", total_errores)
+c5.metric("TOTAL ERRORES REALES", total_errores)
 
-st.info("💡 Una vez que hayas cargado y revisado los archivos, haz clic en el botón de abajo para guardar este registro en nuestras métricas.")
+# --- LÓGICA DE GUARDADO AUTOMÁTICO ---
+archivos_cargados = file_ingr is not None or file_extra is not None or file_det is not None or file_head is not None
 
-if st.button("💾 Guardar Registro en Google Sheets", type="primary"):
-    with st.spinner("Guardando registro en la base de datos..."):
-        try:
-            # Conexión a Google Sheets
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            
+if archivos_cargados:
+    estado_actual = f"{id_toteat}_{total_errores}_{file_ingr.name if file_ingr else ''}_{file_extra.name if file_extra else ''}_{file_det.name if file_det else ''}_{file_head.name if file_head else ''}"
+    
+    if 'ultimo_estado_guardado' not in st.session_state:
+        st.session_state.ultimo_estado_guardado = ""
+
+    if st.session_state.ultimo_estado_guardado != estado_actual:
+        with st.spinner("Registrando consulta automáticamente..."):
             try:
-                # Intenta leer la hoja 'Registro'
-                df_existente = conn.read(worksheet="Registro")
-            except Exception:
-                # Si falla (ej. hoja vacía o recién creada), inicializa vacío
-                df_existente = pd.DataFrame()
-            
-            # Crear la nueva fila
-            nuevo_registro = pd.DataFrame([{
-                "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Correo_Consultor": correo,
-                "ID_Cliente": id_toteat,
-                "Err_Ingredientes": num_err_ingr,
-                "Err_Extras": num_err_extra,
-                "Err_Detalles": num_err_det,
-                "Err_Headers": num_err_head,
-                "Total_Errores": total_errores
-            }])
-            
-            # Unir data y actualizar
-            if not df_existente.empty:
-                df_actualizado = pd.concat([df_existente, nuevo_registro], ignore_index=True)
-            else:
-                df_actualizado = nuevo_registro
+                conn = st.connection("gsheets", type=GSheetsConnection)
                 
-            conn.update(worksheet="Registro", data=df_actualizado)
-            st.success("✅ ¡Registro guardado exitosamente! Gracias por mantener las métricas actualizadas.")
-            
-        except Exception as e:
-            st.error(f"❌ Ocurrió un error al intentar guardar en Google Sheets: {e}")
-            st.write("Verifica que configuraste los 'Secrets' en Streamlit y que compartiste el archivo de Google Sheets con el correo de la cuenta de servicio.")
+                try:
+                    df_existente = conn.read(worksheet="Registro")
+                except Exception:
+                    df_existente = pd.DataFrame()
+                
+                nuevo_registro = pd.DataFrame([{
+                    "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Correo_Consultor": correo,
+                    "ID_Cliente": id_toteat,
+                    "Err_Ingredientes": num_err_ingr,
+                    "Err_Extras": num_err_extra,
+                    "Err_Detalles": num_err_det,
+                    "Err_Headers": num_err_head,
+                    "Total_Errores": total_errores
+                }])
+                
+                if not df_existente.empty:
+                    df_actualizado = pd.concat([df_existente, nuevo_registro], ignore_index=True)
+                else:
+                    df_actualizado = nuevo_registro
+                    
+                conn.update(worksheet="Registro", data=df_actualizado)
+                st.session_state.ultimo_estado_guardado = estado_actual
+                
+            except Exception as e:
+                st.error(f"❌ Error al guardar en Sheets: {repr(e)}")
+                st.info("💡 Revisa que la pestaña se llame 'Registro' y que el correo tenga acceso de Editor.")
+                
+        if st.session_state.ultimo_estado_guardado == estado_actual:
+            st.success("✅ Diagnóstico registrado automáticamente en las métricas.")
+else:
+    st.info("Sube al menos un archivo para iniciar la validación y registrar el diagnóstico.")
