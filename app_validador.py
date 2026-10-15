@@ -119,9 +119,16 @@ def clean_unit(val):
 VALID_UB_MASTERS = ['UN', 'KG', 'L']
 
 # Reglas de compatibilidad de unidades para recetas
+# Reglas de compatibilidad de unidades para recetas
 ALLOWED_UNITS = {
-    'KG': ['kg', 'g', 'GR', 'GRAMO', 'GRAMOS', 'KILOGRAMO', 'KILOGRAMOS', 'oz'],
-    'L': ['L', 'ML', 'MILILITRO', 'MILILITROS', 'LITRO', 'LITROS', 'fl oz'],
+    'KG': [
+        'KG', 'G', 'GR', 'GRAMO', 'GRAMOS', 'KILOGRAMO', 'KILOGRAMOS', 
+        'OZ', 'ONZA', 'ONZAS'
+    ],
+    'L': [
+        'L', 'ML', 'MILILITRO', 'MILILITROS', 'LITRO', 'LITROS', 
+        'FL OZ', 'FLOZ', 'FL. OZ', 'FL.OZ', 'ONZA FLUIDA', 'ONZAS FLUIDAS'
+    ],
     'UN': ['UN', 'UND', 'UNIDAD', 'UNIDADES'],
     'PK': ['PK', 'PAQUETE', 'PAQUETES'],
     'BOX': ['BOX', 'CAJA', 'CAJAS'],
