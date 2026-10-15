@@ -120,6 +120,7 @@ VALID_UB_MASTERS = ['UN', 'KG', 'L']
 
 # Reglas de compatibilidad de unidades para recetas
 # Reglas de compatibilidad de unidades para recetas
+# Reglas de compatibilidad de unidades para recetas
 ALLOWED_UNITS = {
     'KG': [
         'KG', 'G', 'GR', 'GRAMO', 'GRAMOS', 'KILOGRAMO', 'KILOGRAMOS', 
@@ -127,7 +128,8 @@ ALLOWED_UNITS = {
     ],
     'L': [
         'L', 'ML', 'MILILITRO', 'MILILITROS', 'LITRO', 'LITROS', 
-        'FL OZ', 'FLOZ', 'FL. OZ', 'FL.OZ', 'ONZA FLUIDA', 'ONZAS FLUIDAS'
+        'FL OZ', 'FLOZ', 'FL. OZ', 'FL.OZ', 'ONZA FLUIDA', 'ONZAS FLUIDAS',
+        'CC', 'C.C.', 'CM3'
     ],
     'UN': ['UN', 'UND', 'UNIDAD', 'UNIDADES'],
     'PK': ['PK', 'PAQUETE', 'PAQUETES'],
