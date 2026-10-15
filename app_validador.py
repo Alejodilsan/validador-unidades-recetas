@@ -120,8 +120,8 @@ VALID_UB_MASTERS = ['UN', 'KG', 'L']
 
 # Reglas de compatibilidad de unidades para recetas
 ALLOWED_UNITS = {
-    'KG': ['KG', 'G', 'GR', 'GRAMO', 'GRAMOS', 'KILOGRAMO', 'KILOGRAMOS'],
-    'L': ['L', 'ML', 'MILILITRO', 'MILILITROS', 'LITRO', 'LITROS'],
+    'KG': ['kg', 'g','oz'],
+    'L': ['L', 'mL', 'fl oz'],
     'UN': ['UN', 'UND', 'UNIDAD', 'UNIDADES'],
     'PK': ['PK', 'PAQUETE', 'PAQUETES'],
     'BOX': ['BOX', 'CAJA', 'CAJAS'],
